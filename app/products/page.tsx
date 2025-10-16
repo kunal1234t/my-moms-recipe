@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 import ProductCard from "@/components/product-card"
@@ -12,175 +12,67 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { collection, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 type Product = {
   id: string
   name: string
   image: string
   price: number
-  originalPrice: number
+  originalPrice?: number
   rating: number
   reviews: number
   isNew?: boolean
   isBestseller?: boolean
+  category?: string
+  weight?: string
+  inStock?: boolean
 }
 
-const allProducts: Product[] = [
-  {
-    id: "1",
-    name: "Mom's Recipe Mango Chatkara - Premium Graded (400g)",
-    image: "/images/mangopunjabi.jpg",
-    price: 149,
-    originalPrice: 199,
-    rating: 4.8,
-    reviews: 124,
-    isBestseller: true,
-  },
-  {
-    id: "2",
-    name: "Mom's Recipe Mirch Pickle - Spicy & Tangy (400g)",
-    image: "/images/mirch.jpg",
-    price: 129,
-    originalPrice: 159,
-    rating: 4.6,
-    reviews: 89,
-    isNew: true,
-  },
-  {
-    id: "3",
-    name: "Mango Pickle (Punjabi Style) - 1kg",
-    image: "/images/mangopunjabi.jpg",
-    price: 475,
-    originalPrice: 525,
-    rating: 4.7,
-    reviews: 156,
-    isBestseller: true,
-  },
-  {
-    id: "4",
-    name: "Mango Pickle (Punjabi Style) - 400g",
-    image: "/images/mangopunjabi.jpg",
-    price: 190,
-    originalPrice: 220,
-    rating: 4.6,
-    reviews: 98,
-  },
-  {
-    id: "5",
-    name: "Mango Chatkara - 1kg",
-    image: "/images/mangochatkara.jpg",
-    price: 600,
-    originalPrice: 650,
-    rating: 4.9,
-    reviews: 210,
-    isBestseller: true,
-  },
-  {
-    id: "6",
-    name: "Mango Chatkara - 500g",
-    image: "/images/mangochatkara.jpg",
-    price: 310,
-    originalPrice: 350,
-    rating: 4.8,
-    reviews: 145,
-  },
-  {
-    id: "7",
-    name: "Mango Chatkara - 200g",
-    image: "/images/mangochatkara.jpg",
-    price: 145,
-    originalPrice: 175,
-    rating: 4.7,
-    reviews: 87,
-  },
-  {
-    id: "8",
-    name: "Mirchi Pickle - 400g",
-    image: "/images/mirch.jpg",
-    price: 250,
-    originalPrice: 290,
-    rating: 4.5,
-    reviews: 112,
-  },
-  {
-    id: "9",
-    name: "Mirchi Pickle - 200g",
-    image: "/images/mirch.jpg",
-    price: 125,
-    originalPrice: 150,
-    rating: 4.4,
-    reviews: 76,
-  },
-  {
-    id: "10",
-    name: "Garlic Pickle - 400g",
-    image: "/images/garlic.jpg",
-    price: 300,
-    originalPrice: 350,
-    rating: 4.7,
-    reviews: 134,
-  },
-  {
-    id: "11",
-    name: "Garlic Pickle - 200g",
-    image: "/images/garlic.jpg",
-    price: 150,
-    originalPrice: 180,
-    rating: 4.6,
-    reviews: 89,
-  },
-  {
-    id: "12",
-    name: "Sweet Lemon Pickle - 500g",
-    image: "/images/sweetlemon.jpg",
-    price: 250,
-    originalPrice: 280,
-    rating: 4.6,
-    reviews: 102,
-  },
-  {
-    id: "13",
-    name: "Sweet Lemon Pickle - 250g",
-    image: "/images/sweetlemon.jpg",
-    price: 135,
-    originalPrice: 150,
-    rating: 4.5,
-    reviews: 67,
-  },
-  {
-    id: "14",
-    name: "Chatpata Lemon Pickle - 500g",
-    image: "/images/chatpatalemon.jpg",
-    price: 250,
-    originalPrice: 280,
-    rating: 4.7,
-    reviews: 118,
-  },
-  {
-    id: "15",
-    name: "Chatpata Lemon Pickle - 250g",
-    image: "/images/chatpatalemon.jpg",
-    price: 135,
-    originalPrice: 150,
-    rating: 4.6,
-    reviews: 72,
-  },
-  {
-    id: "16",
-    name: "Mix Pickle - 400g",
-    image: "/images/mixpickle.jpg",
-    price: 200,
-    originalPrice: 240,
-    rating: 4.6,
-    reviews: 95,
-  },
-]
-
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>(allProducts)
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'products'))
+        const productsData: Product[] = []
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data()
+          productsData.push({
+            id: doc.id,
+            name: data.name,
+            image: data.images?.[0] || "/placeholder.svg",
+            price: data.price,
+            originalPrice: data.originalPrice,
+            rating: data.rating || 4.5,
+            reviews: data.reviews || 0,
+            isNew: data.isNew || false,
+            isBestseller: data.isBestseller || false,
+            category: data.category,
+            weight: data.weight,
+            inStock: data.inStock !== false
+          })
+        })
+        
+        setProducts(productsData)
+        setFilteredProducts(productsData)
+      } catch (error) {
+        console.error("Error fetching products:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [])
 
   const handleSort = (value: string) => {
-    let sorted = [...products]
+    let sorted = [...filteredProducts]
     switch (value) {
       case "price-low":
         sorted.sort((a, b) => a.price - b.price)
@@ -192,13 +84,40 @@ export default function ProductsPage() {
         sorted.sort((a, b) => b.rating - a.rating)
         break
       case "newest":
-        sorted = allProducts.filter((p) => p.isNew)
+        sorted = filteredProducts.filter((p) => p.isNew)
         break
       case "popular":
       default:
-        sorted = [...allProducts]
+        sorted = [...filteredProducts]
     }
-    setProducts(sorted)
+    setFilteredProducts(sorted)
+  }
+
+  const filterByCategory = (category: string) => {
+    if (category === "all") {
+      setFilteredProducts(products)
+    } else {
+      const filtered = products.filter(product => 
+        product.category?.toLowerCase().includes(category.toLowerCase()) ||
+        product.name.toLowerCase().includes(category.toLowerCase())
+      )
+      setFilteredProducts(filtered)
+    }
+  }
+
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading products...</p>
+          </div>
+        </main>
+        <Footer />
+      </>
+    )
   }
 
   return (
@@ -219,25 +138,25 @@ export default function ProductsPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts)}>
+              <Button variant="outline" size="sm" onClick={() => filterByCategory("all")}>
                 All Products
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts.filter(p => p.name.toLowerCase().includes("mango")))}>
+              <Button variant="outline" size="sm" onClick={() => filterByCategory("mango")}>
                 Mango Pickles
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts.filter(p => p.name.toLowerCase().includes("mirchi") || p.name.toLowerCase().includes("chili")))}>
+              <Button variant="outline" size="sm" onClick={() => filterByCategory("chili")}>
                 Chili Pickles
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts.filter(p => p.name.toLowerCase().includes("lemon")))}>
+              <Button variant="outline" size="sm" onClick={() => filterByCategory("lemon")}>
                 Lemon Pickles
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts.filter(p => p.name.toLowerCase().includes("garlic")))}>
+              <Button variant="outline" size="sm" onClick={() => filterByCategory("garlic")}>
                 Garlic Pickles
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts.filter(p => p.isNew))}>
+              <Button variant="outline" size="sm" onClick={() => setFilteredProducts(products.filter(p => p.isNew))}>
                 New Arrivals
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setProducts(allProducts.filter(p => p.isBestseller))}>
+              <Button variant="outline" size="sm" onClick={() => setFilteredProducts(products.filter(p => p.isBestseller))}>
                 Bestsellers
               </Button>
             </div>
@@ -256,18 +175,17 @@ export default function ProductsPage() {
           </div>
 
           {/* Products Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <ProductCard key={product.id} {...product} />
-            ))}
-          </div>
-
-          {/* Load More */}
-          <div className="text-center mt-12">
-            <Button size="lg" variant="outline" disabled>
-              Load More Products
-            </Button>
-          </div>
+          {filteredProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600 text-lg">No products found. Please try a different filter.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredProducts.map((product) => (
+                <ProductCard key={product.id} {...product} />
+              ))}
+            </div>
+          )}
         </div>
       </main>
       <Footer />

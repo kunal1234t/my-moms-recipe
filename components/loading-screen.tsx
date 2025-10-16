@@ -5,7 +5,7 @@ import Image from "next/image"
 
 export default function LoadingScreen() {
   const [isLoading, setIsLoading] = useState(true)
-  const [loadingText, setLoadingText] = useState("Preparing your experience...")
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
 
   const loadingMessages = [
     "Preparing your experience...",
@@ -21,18 +21,14 @@ export default function LoadingScreen() {
 
     // Cycle through loading messages
     const messageInterval = setInterval(() => {
-      setLoadingText((prev) => {
-        const currentIndex = loadingMessages.indexOf(prev)
-        const nextIndex = (currentIndex + 1) % loadingMessages.length
-        return loadingMessages[nextIndex]
-      })
+      setCurrentMessageIndex((prev) => (prev + 1) % loadingMessages.length)
     }, 750)
 
     return () => {
       clearTimeout(timer)
       clearInterval(messageInterval)
     }
-  }, [])
+  }, [loadingMessages.length]) // Added dependency
 
   if (!isLoading) return null
 
@@ -41,7 +37,7 @@ export default function LoadingScreen() {
       <div className="text-center">
         {/* Logo */}
         <div className="mb-8">
-          <Image src="/images/logo.jpg" alt="My Mom's Recipe" width={200} height={100} className="mx-auto" />
+          <Image src="/images/logo.jpg" alt="My Mom&rsquo;s Recipe" width={200} height={100} className="mx-auto" />
         </div>
 
         {/* Animated Loading Dots */}
@@ -64,7 +60,9 @@ export default function LoadingScreen() {
 
         {/* Loading Text */}
         <div className="space-y-2">
-          <p className="text-lg font-medium text-green-700 transition-all duration-300">{loadingText}</p>
+          <p className="text-lg font-medium text-green-700 transition-all duration-300">
+            {loadingMessages[currentMessageIndex]}
+          </p>
           <div className="flex justify-center">
             <div className="w-32 h-1 bg-gray-200 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-green-500 to-yellow-500 rounded-full animate-pulse"></div>

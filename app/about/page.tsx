@@ -59,7 +59,7 @@ export default function AboutPage() {
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-green-600 to-yellow-600 py-20">
           <div className="container mx-auto px-4 text-center text-white">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">About My Mom's Recipe</h1>
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">About My Mom&rsquo;s Recipe</h1>
             <p className="text-xl md:text-2xl max-w-3xl mx-auto opacity-90">
               Bringing you authentic home-made pickles and preserves with traditional recipes and love
             </p>
@@ -74,7 +74,7 @@ export default function AboutPage() {
                 <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">Our Story</h2>
                 <div className="space-y-4 text-gray-700 leading-relaxed">
                   <p>
-                    My Mom's Recipe began in 1995 when Mrs. Niranjan Devi started making pickles and preserves in her
+                    My Mom&rsquo;s Recipe began in 1995 when Mrs. Niranjan Devi started making pickles and preserves in her
                     small kitchen in Faridabad, Haryana. What started as a way to preserve seasonal vegetables and
                     fruits for her family soon became a passion that would touch thousands of lives.
                   </p>
@@ -84,7 +84,7 @@ export default function AboutPage() {
                     and word spread about the exceptional pickles made with love and traditional methods.
                   </p>
                   <p>
-                    Today, My Mom's Recipe has grown into a trusted brand, but we've never forgotten our roots. Every
+                    Today, My Mom&rsquo;s Recipe has grown into a trusted brand, but we&rsquo;ve never forgotten our roots. Every
                     jar still carries the same love, care, and authentic taste that Mrs. Niranjan Devi put into her very
                     first batch nearly three decades ago.
                   </p>

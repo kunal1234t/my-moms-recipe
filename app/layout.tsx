@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import SessionProviderWrapper from "@/components/SessionProviderWrapper"
-import { CartProvider } from "@/context/cart-context"
+import { AuthProvider } from "@/contexts/AuthContext"
+import { CartProvider } from "@/contexts/cart-context"
 import { Toaster } from "sonner"
 
 const inter = Inter({ 
@@ -79,7 +79,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable}`}>
       <body className="min-h-screen bg-gray-50 antialiased">
-        <SessionProviderWrapper>
+        <AuthProvider>
           <CartProvider>
             {children}
             <Toaster 
@@ -94,7 +94,7 @@ export default function RootLayout({
               }}
             />
           </CartProvider>
-        </SessionProviderWrapper>
+        </AuthProvider>
       </body>
     </html>
   )

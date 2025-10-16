@@ -16,25 +16,26 @@ export default function HomePage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false)
-    }, 3000)
+    }, 2000) // Reduced loading time
 
     return () => clearTimeout(timer)
   }, [])
 
+  if (isLoading) {
+    return <LoadingScreen />
+  }
+
   return (
     <>
-      {isLoading && <LoadingScreen />}
-      <div className={`transition-opacity duration-500 ${isLoading ? "opacity-0" : "opacity-100"}`}>
-        <Header />
-        <main>
-          <HeroSlider />
-          <ProductGrid />
-          <BannerSection />
-          <FeaturesSection />
-          <NewsletterSection />
-        </main>
-        <Footer />
-      </div>
+      <Header />
+      <main>
+        <HeroSlider />
+        <ProductGrid />
+        <BannerSection />
+        <FeaturesSection />
+        <NewsletterSection />
+      </main>
+      <Footer />
     </>
   )
 }

@@ -1,3 +1,4 @@
+// app/cart/page.tsx
 "use client"
 
 import { useState } from "react"
@@ -10,22 +11,20 @@ import Footer from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { useCart } from "@/context/cart-context"
-import { useSession } from "next-auth/react"
-import { toast } from "sonner" // or your preferred toast library
-import { Session } from "next-auth" 
-
+import { useCart } from "@/contexts/cart-context"
+import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 
 export default function CartPage() {
-  const { data: session } = useSession()
+  const { user, loading } = useAuth()
   const router = useRouter()
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart()
   const [couponCode, setCouponCode] = useState("")
   const [isCheckout, setIsCheckout] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState("")
   const [userPhone, setUserPhone] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
   
-  // Calculate cart totals
   const subtotal = cart.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0)
   const originalTotal = cart.reduce((sum, item) => sum + (item.originalPrice || item.price) * (item.quantity || 1), 0)
   const savings = originalTotal - subtotal
@@ -33,77 +32,119 @@ export default function CartPage() {
   const total = subtotal + shipping
 
   const handleProceedToCheckout = () => {
-    if (!session?.user) {
+    if (!user) {
       router.push("/auth/signin?callbackUrl=/cart")
       return
     }
     setIsCheckout(true)
-    // Pre-fill phone if available in session
-    if (session.user.phone) {
-      setUserPhone(session.user.phone)
-    }
+    // You can pre-fill phone if available in user data
+    // You might want to fetch user data from Firestore here
   }
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
   if (!deliveryAddress.trim()) {
-    toast.error("Please enter a delivery address");
-    return;
+    toast.error("Please enter a delivery address")
+    return
   }
   if (!userPhone.trim()) {
-    toast.error("Please enter your phone number");
-    return;
+    toast.error("Please enter your phone number")
+    return
   }
+
+  setIsProcessing(true)
 
   try {
-    const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
-    if (!whatsappNumber) {
-      throw new Error("WhatsApp service not configured");
+    // Prepare order data for Firebase
+    const orderData = {
+      user: {
+        uid: user?.uid,
+        email: user?.email,
+        name: user?.displayName || "Customer",
+        phone: userPhone
+      },
+      items: cart.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity || 1,
+        image: item.image,
+        weight: item.weight
+      })),
+      totalAmount: total,
+      subtotal: subtotal,
+      shipping: shipping,
+      shippingAddress: deliveryAddress,
+      paymentMethod: "cash",
+      status: "pending",
+      createdAt: new Date().toISOString()
     }
 
-    // Format items list with proper encoding
-    const itemsList = cart.map(item => 
-      `- ${item.name} (${item.quantity || 1} × ₹${item.price})`
-    ).join("%0a"); // URL encoded newline
+    // Save order to Firebase
+    const orderResponse = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData)
+    })
 
-    // Construct message parts
-    const messageParts = [
-      "*New Order Request*",
-      "",
-      `*Customer:* ${session?.user?.name || 'Not specified'}`,
-      "",
-      "*Items:*",
-      itemsList,
-      "",
-      `*Subtotal:* ₹${subtotal}`,
-      `*Shipping:* ${shipping === 0 ? 'Free' : `₹${shipping}`}`,
-      `*Total:* ₹${total}`,
-      "",
-      `*Delivery Address:*`,
-      encodeURIComponent(deliveryAddress),
-      "",
-      `*E-mail:* ${session?.user?.email || 'Not provided'}`,
-      `*Phone:* ${encodeURIComponent(userPhone)}`
-    ];
+    if (!orderResponse.ok) {
+      const errorData = await orderResponse.json()
+      throw new Error(errorData.error || 'Failed to create order')
+    }
 
-    // Join with URL encoded newlines
-    const fullMessage = messageParts.join("%0a");
-    const whatsappUrl = `https://wa.me/91${whatsappNumber}?text=${fullMessage}`;
+    const { orderId } = await orderResponse.json()
 
-    // Test the URL in console before opening
-    console.log("WhatsApp URL:", whatsappUrl);
-    
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-    clearCart();
-    setIsCheckout(true);
-    toast.success("Order placed successfully!");
+    // Send WhatsApp notification to ADMIN (server-side)
+    const whatsappResponse = await fetch('/api/send-whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId,
+        customerName: user?.displayName || 'Customer',
+        customerPhone: userPhone,
+        customerEmail: user?.email || 'Not provided',
+        items: cart,
+        subtotal,
+        shipping,
+        total,
+        deliveryAddress
+      })
+    })
 
-  } catch (error) {
-    console.error("Order failed:", error);
-    toast.error("Failed to place order. Please try again.");
+    if (!whatsappResponse.ok) {
+      console.warn("Failed to send WhatsApp notification, but order was created")
+      // Don't throw error here - order was created successfully
+    }
+
+    // Clear cart and redirect
+    clearCart()
+    toast.success("Order placed successfully! We'll contact you shortly.")
+    router.push('/account?tab=orders')
+
+  } catch (error: unknown) {
+    console.error("Order failed:", error)
+    const errorMessage = error instanceof Error ? error.message : "Failed to place order. Please try again."
+    toast.error(errorMessage)
+  } finally {
+    setIsProcessing(false)
   }
-};
+}
 
-  if (cart.length === 0) {
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </main>
+        <Footer />
+      </>
+    )
+  }
+
+  if (cart.length === 0 && !isCheckout) {
     return (
       <>
         <Header />
@@ -111,16 +152,14 @@ export default function CartPage() {
           <div className="text-center max-w-md px-4">
             <ShoppingBag className="h-24 w-24 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {isCheckout ? "Order Placed Successfully!" : "Your cart is empty"}
+              Your cart is empty
             </h2>
             <p className="text-gray-600 mb-6">
-              {isCheckout 
-                ? "Thank you for your order! We'll contact you shortly to confirm delivery details." 
-                : "Browse our delicious pickles to get started!"}
+              Browse our delicious pickles to get started!
             </p>
             <Link href="/products">
               <Button className="bg-green-600 hover:bg-green-700 px-6 py-3">
-                {isCheckout ? "Continue Shopping" : "View Products"}
+                View Products
               </Button>
             </Link>
           </div>
@@ -148,7 +187,6 @@ export default function CartPage() {
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Order Summary</h1>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Order Details */}
               <div className="lg:col-span-2 space-y-4">
                 <Card>
                   <CardHeader>
@@ -156,16 +194,23 @@ export default function CartPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Delivery Address</label>
+                      <label className="block text-sm font-medium mb-1">Full Name</label>
                       <Input
-                        placeholder="Full address with landmarks"
-                        value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
-                        required
+                        value={user?.displayName || ""}
+                        disabled
+                        className="bg-gray-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Contact Number</label>
+                      <label className="block text-sm font-medium mb-1">Email</label>
+                      <Input
+                        value={user?.email || ""}
+                        disabled
+                        className="bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Contact Number *</label>
                       <Input
                         placeholder="Phone number for delivery updates"
                         value={userPhone}
@@ -173,9 +218,15 @@ export default function CartPage() {
                         required
                       />
                     </div>
-                    <p className="text-sm text-gray-600">
-                      Please ensure your address is accurate. We'll call to confirm before delivery.
-                    </p>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Delivery Address *</label>
+                      <Input
+                        placeholder="Full address with landmarks, city, pincode"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        required
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -198,7 +249,7 @@ export default function CartPage() {
                           <div>
                             <h3 className="font-medium">{item.name}</h3>
                             <p className="text-sm text-gray-600">
-                              {item.quantity || 1} × ₹{item.price}
+                              {item.weight || item.quantity || 1} × ₹{item.price}
                             </p>
                           </div>
                         </div>
@@ -211,7 +262,6 @@ export default function CartPage() {
                 </Card>
               </div>
 
-              {/* Order Total */}
               <div className="lg:col-span-1">
                 <Card>
                   <CardHeader>
@@ -242,13 +292,14 @@ export default function CartPage() {
 
                     <div className="pt-4">
                       <p className="text-sm text-gray-600 mb-4">
-                        You'll complete payment via cash on delivery or digital payment when we confirm your order.
+                        We&rsquo;ll contact you on WhatsApp to confirm your order and arrange payment (Cash on Delivery or digital payment).
                       </p>
                       <Button 
                         className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg"
                         onClick={handlePlaceOrder}
+                        disabled={isProcessing}
                       >
-                        Confirm Order via WhatsApp
+                        {isProcessing ? 'Processing...' : 'Confirm Order via WhatsApp'}
                       </Button>
                     </div>
                   </CardContent>
@@ -270,7 +321,6 @@ export default function CartPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Shopping Cart</h1>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
               {cart.map((item) => (
                 <Card key={item.id} className="hover:shadow-md transition-shadow">
@@ -287,6 +337,7 @@ export default function CartPage() {
 
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-gray-900 mb-1 truncate">{item.name}</h3>
+                        <p className="text-sm text-gray-600 mb-1">{item.weight}</p>
                         <div className="flex items-center space-x-2">
                           <span className="text-lg font-bold text-green-600">₹{item.price}</span>
                           {item.originalPrice && item.originalPrice > item.price && (
@@ -334,7 +385,6 @@ export default function CartPage() {
               ))}
             </div>
 
-            {/* Order Summary */}
             <div className="lg:col-span-1">
               <Card className="sticky top-4">
                 <CardHeader>
@@ -368,7 +418,6 @@ export default function CartPage() {
                     </div>
                   </div>
 
-                  {/* Coupon Code */}
                   <div className="space-y-2 pt-2">
                     <label className="text-sm font-medium">Coupon Code</label>
                     <div className="flex gap-2">
@@ -387,8 +436,9 @@ export default function CartPage() {
                   <Button 
                     className="w-full bg-green-600 hover:bg-green-700 mt-4 h-12 text-lg"
                     onClick={handleProceedToCheckout}
+                    disabled={loading}
                   >
-                    Proceed to Checkout
+                    {loading ? 'Loading...' : 'Proceed to Checkout'}
                   </Button>
 
                   <Link href="/products">

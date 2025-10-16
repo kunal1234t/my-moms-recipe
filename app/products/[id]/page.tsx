@@ -1,6 +1,7 @@
+// app/product/[id]/page.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useParams } from "next/navigation"
 import { Star, Heart, Share2, Minus, Plus, ShoppingCart, Truck, Shield, RotateCcw } from "lucide-react"
@@ -11,279 +12,30 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useCart } from "@/context/cart-context"
+import { useCart } from "@/contexts/cart-context"
+import { useAuth } from "@/contexts/AuthContext"
+import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
 
-// Mock product data
-const productData = {
-  "1": {
-    id: "1",
-    name: "Mom's Recipe Mango Chatkara - Premium Graded",
-    brand: "Mom's Recipe",
-    images: ["/images/mangopunjabi.jpg", "/images/mangopunjabi.jpg", "/images/mangopunjabi.jpg"],
-    price: 149,
-    originalPrice: 199,
-    rating: 4.8,
-    reviews: 124,
-    inStock: true,
-    description:
-      "Our premium mango chatkara is made from carefully selected raw mangoes, blended with traditional spices and herbs. This pickle captures the authentic taste of homemade preserves, prepared in small batches to ensure maximum freshness and flavor. No artificial colors or preservatives are used in our preparation process.",
-    ingredients: "Raw Mango, Mustard Oil, Red Chili Powder, Turmeric, Fenugreek Seeds, Mustard Seeds, Asafoetida, Salt",
-    nutritionalInfo: "Energy: 45 kcal per 100g, Carbohydrates: 8g, Fat: 2g, Protein: 1g, Sodium: 850mg",
-    shelfLife: "12 months from date of manufacture",
-    weight: "400g",
-    isBestseller: true,
-  },
-  "2": {
-    id: "2",
-    name: "Mom's Recipe Mirch Pickle - Spicy & Tangy",
-    brand: "Mom's Recipe",
-    images: ["/images/mirch.jpg", "/images/mirch.jpg", "/images/mirch.jpg"],
-    price: 129,
-    originalPrice: 159,
-    rating: 4.6,
-    reviews: 89,
-    inStock: true,
-    description:
-      "A fiery blend of fresh green chilies and aromatic spices, our mirch pickle is perfect for spice lovers. Made using traditional recipes passed down through generations.",
-    ingredients: "Green Chili, Mustard Oil, Turmeric, Red Chili Powder, Fenugreek Seeds, Mustard Seeds, Salt",
-    nutritionalInfo: "Energy: 35 kcal per 100g, Carbohydrates: 6g, Fat: 1.5g, Protein: 1.2g, Sodium: 900mg",
-    shelfLife: "12 months from date of manufacture",
-    weight: "350g",
-    isNew: true,
-  },
-  "3": {
-    id: "3",
-    name: "Mango Pickle (Punjabi Style) - 1kg",
-    brand: "Mom's Recipe",
-    images: ["/images/mangopunjabi.jpg", "/images/mangopunjabi.jpg", "/images/mangopunjabi.jpg"],
-    price: 475,
-    originalPrice: 525,
-    rating: 4.7,
-    reviews: 156,
-    inStock: true,
-    description:
-      "Authentic Punjabi style mango pickle with robust flavors and traditional spices. Perfect accompaniment to any meal with its tangy and spicy taste profile.",
-    ingredients: "Raw Mango, Mustard Oil, Salt, Red Chili Powder, Turmeric, Fenugreek, Fennel, Nigella Seeds",
-    nutritionalInfo: "Energy: 50 kcal per 100g, Carbohydrates: 9g, Fat: 2.5g, Protein: 1.2g, Sodium: 800mg",
-    shelfLife: "12 months",
-    weight: "1kg",
-    isBestseller: true,
-  },
-  "4": {
-    id: "4",
-    name: "Mango Pickle (Punjabi Style) - 400g",
-    brand: "Mom's Recipe",
-    images: ["/images/mangopunjabi.jpg", "/images/mangopunjabi.jpg", "/images/mangopunjabi.jpg"],
-    price: 190,
-    originalPrice: 220,
-    rating: 4.6,
-    reviews: 98,
-    inStock: true,
-    description: "Same great Punjabi style mango pickle in a convenient 400g pack.",
-    ingredients: "Raw Mango, Mustard Oil, Salt, Red Chili Powder, Turmeric, Fenugreek, Fennel, Nigella Seeds",
-    nutritionalInfo: "Energy: 50 kcal per 100g, Carbohydrates: 9g, Fat: 2.5g, Protein: 1.2g, Sodium: 800mg",
-    shelfLife: "12 months",
-    weight: "400g",
-  },
-  "5": {
-    id: "5",
-    name: "Mango Chatkara - 1kg",
-    brand: "Mom's Recipe",
-    images: ["/images/mangochatkara.jpg", "/images/mangochatkara.jpg", "/images/mangochatkara.jpg"],
-    price: 600,
-    originalPrice: 650,
-    rating: 4.9,
-    reviews: 210,
-    inStock: true,
-    description:
-      "Special chatkara variety with extra tanginess and spice. Made from specially selected mangoes for that perfect balance of sour and spicy flavors.",
-    ingredients: "Raw Mango, Mustard Oil, Salt, Red Chili Powder, Turmeric, Fenugreek, Asafoetida, Mustard Seeds",
-    nutritionalInfo: "Energy: 48 kcal per 100g, Carbohydrates: 8.5g, Fat: 2.2g, Protein: 1.1g, Sodium: 820mg",
-    shelfLife: "12 months",
-    weight: "1kg",
-    isBestseller: true,
-  },
-  "6": {
-    id: "6",
-    name: "Mango Chatkara - 500g",
-    brand: "Mom's Recipe",
-    images: ["/images/mangochatkara.jpg", "/images/mangochatkara.jpg", "/images/mangochatkara.jpg"],
-    price: 310,
-    originalPrice: 350,
-    rating: 4.8,
-    reviews: 145,
-    inStock: true,
-    description: "The same delicious mango chatkara in a 500g pack.",
-    ingredients: "Raw Mango, Mustard Oil, Salt, Red Chili Powder, Turmeric, Fenugreek, Asafoetida, Mustard Seeds",
-    nutritionalInfo: "Energy: 48 kcal per 100g, Carbohydrates: 8.5g, Fat: 2.2g, Protein: 1.1g, Sodium: 820mg",
-    shelfLife: "12 months",
-    weight: "500g",
-  },
-  "7": {
-    id: "7",
-    name: "Mango Chatkara - 200g",
-    brand: "Mom's Recipe",
-    images: ["/images/mangochatkara.jpg", "/images/mangochatkara.jpg", "/images/mangochatkara.jpg"],
-    price: 145,
-    originalPrice: 175,
-    rating: 4.7,
-    reviews: 87,
-    inStock: true,
-    description: "Perfect trial size of our famous mango chatkara pickle.",
-    ingredients: "Raw Mango, Mustard Oil, Salt, Red Chili Powder, Turmeric, Fenugreek, Asafoetida, Mustard Seeds",
-    nutritionalInfo: "Energy: 48 kcal per 100g, Carbohydrates: 8.5g, Fat: 2.2g, Protein: 1.1g, Sodium: 820mg",
-    shelfLife: "12 months",
-    weight: "200g",
-  },
-  "8": {
-    id: "8",
-    name: "Mirchi Pickle - 400g",
-    brand: "Mom's Recipe",
-    images: ["/images/mirch.jpg", "/images/mirch.jpg", "/images/mirch.jpg"],
-    price: 250,
-    originalPrice: 290,
-    rating: 4.5,
-    reviews: 112,
-    inStock: true,
-    description:
-      "Spicy green chili pickle that adds fire to your meals. Made from fresh green chilies and traditional spices for authentic flavor.",
-    ingredients: "Green Chilies, Mustard Oil, Salt, Turmeric, Fenugreek, Mustard Seeds, Asafoetida",
-    nutritionalInfo: "Energy: 38 kcal per 100g, Carbohydrates: 6.5g, Fat: 1.8g, Protein: 1.3g, Sodium: 850mg",
-    shelfLife: "12 months",
-    weight: "400g",
-  },
-  "9": {
-    id: "9",
-    name: "Mirchi Pickle - 200g",
-    brand: "Mom's Recipe",
-    images: ["/images/mirch.jpg", "/images/mirch.jpg", "/images/mirch.jpg"],
-    price: 125,
-    originalPrice: 150,
-    rating: 4.4,
-    reviews: 76,
-    inStock: true,
-    description: "Small pack of our fiery mirchi pickle for those who love heat in their meals.",
-    ingredients: "Green Chilies, Mustard Oil, Salt, Turmeric, Fenugreek, Mustard Seeds, Asafoetida",
-    nutritionalInfo: "Energy: 38 kcal per 100g, Carbohydrates: 6.5g, Fat: 1.8g, Protein: 1.3g, Sodium: 850mg",
-    shelfLife: "12 months",
-    weight: "200g",
-  },
-  "10": {
-    id: "10",
-    name: "Garlic Pickle - 400g",
-    brand: "Mom's Recipe",
-    images: ["/images/garlic.jpg", "/images/garlic.jpg", "/images/garlic.jpg"],
-    price: 300,
-    originalPrice: 350,
-    rating: 4.7,
-    reviews: 134,
-    inStock: true,
-    description:
-      "Flavorful garlic pickle with health benefits. Made from fresh garlic cloves marinated in spices and mustard oil.",
-    ingredients: "Garlic, Mustard Oil, Salt, Red Chili Powder, Turmeric, Lemon Juice, Mustard Seeds",
-    nutritionalInfo: "Energy: 55 kcal per 100g, Carbohydrates: 10g, Fat: 2g, Protein: 2g, Sodium: 780mg",
-    shelfLife: "12 months",
-    weight: "400g",
-  },
-  "11": {
-    id: "11",
-    name: "Garlic Pickle - 200g",
-    brand: "Mom's Recipe",
-    images: ["/images/garlic.jpg", "/images/garlic.jpg", "/images/garlic.jpg"],
-    price: 150,
-    originalPrice: 180,
-    rating: 4.6,
-    reviews: 89,
-    inStock: true,
-    description: "Smaller pack of our popular garlic pickle with all the same great flavors.",
-    ingredients: "Garlic, Mustard Oil, Salt, Red Chili Powder, Turmeric, Lemon Juice, Mustard Seeds",
-    nutritionalInfo: "Energy: 55 kcal per 100g, Carbohydrates: 10g, Fat: 2g, Protein: 2g, Sodium: 780mg",
-    shelfLife: "12 months",
-    weight: "200g",
-  },
-  "12": {
-    id: "12",
-    name: "Sweet Lemon Pickle - 500g",
-    brand: "Mom's Recipe",
-    images: ["/images/sweetlemon.jpg", "/images/sweetlemon.jpg", "/images/sweetlemon.jpg"],
-    price: 250,
-    originalPrice: 280,
-    rating: 4.6,
-    reviews: 102,
-    inStock: true,
-    description:
-      "Sweet and tangy lemon pickle with a perfect balance of flavors. Great as a condiment or even as a spread.",
-    ingredients: "Lemon, Sugar, Salt, Red Chili Powder, Turmeric, Mustard Seeds, Fenugreek, Asafoetida",
-    nutritionalInfo: "Energy: 120 kcal per 100g, Carbohydrates: 25g, Fat: 1.5g, Protein: 1g, Sodium: 600mg",
-    shelfLife: "10 months",
-    weight: "500g",
-  },
-  "13": {
-    id: "13",
-    name: "Sweet Lemon Pickle - 250g",
-    brand: "Mom's Recipe",
-    images: ["/images/sweetlemon.jpg", "/images/sweetlemon.jpg", "/images/sweetlemon.jpg"],
-    price: 135,
-    originalPrice: 150,
-    rating: 4.5,
-    reviews: 67,
-    inStock: true,
-    description: "Half-size pack of our popular sweet lemon pickle.",
-    ingredients: "Lemon, Sugar, Salt, Red Chili Powder, Turmeric, Mustard Seeds, Fenugreek, Asafoetida",
-    nutritionalInfo: "Energy: 120 kcal per 100g, Carbohydrates: 25g, Fat: 1.5g, Protein: 1g, Sodium: 600mg",
-    shelfLife: "10 months",
-    weight: "250g",
-  },
-  "14": {
-    id: "14",
-    name: "Chatpata Lemon Pickle - 500g",
-    brand: "Mom's Recipe",
-    images: ["/images/chatpatalemon.jpg", "/images/chatpatalemon.jpg", "/images/chatpatalemon.jpg"],
-    price: 250,
-    originalPrice: 280,
-    rating: 4.7,
-    reviews: 118,
-    inStock: true,
-    description:
-      "Spicy and tangy lemon pickle with bold flavors. Perfect for those who love a bit of heat with their sour.",
-    ingredients: "Lemon, Salt, Red Chili Powder, Turmeric, Mustard Seeds, Fenugreek, Asafoetida, Mustard Oil",
-    nutritionalInfo: "Energy: 45 kcal per 100g, Carbohydrates: 8g, Fat: 2g, Protein: 1g, Sodium: 900mg",
-    shelfLife: "12 months",
-    weight: "500g",
-  },
-  "15": {
-    id: "15",
-    name: "Chatpata Lemon Pickle - 250g",
-    brand: "Mom's Recipe",
-    images: ["/images/chatpatalemon.jpg", "/images/chatpatalemon.jpg", "/images/chatpatalemon.jpg"],
-    price: 135,
-    originalPrice: 150,
-    rating: 4.6,
-    reviews: 72,
-    inStock: true,
-    description: "Smaller pack of our spicy chatpata lemon pickle with all the same great flavors.",
-    ingredients: "Lemon, Salt, Red Chili Powder, Turmeric, Mustard Seeds, Fenugreek, Asafoetida, Mustard Oil",
-    nutritionalInfo: "Energy: 45 kcal per 100g, Carbohydrates: 8g, Fat: 2g, Protein: 1g, Sodium: 900mg",
-    shelfLife: "12 months",
-    weight: "250g",
-  },
-  "16": {
-    id: "16",
-    name: "Mix Pickle - 400g",
-    brand: "Mom's Recipe",
-    images: ["/images/mixpickle.jpg", "/images/mixpickle.jpg", "/images/mixpickle.jpg"],
-    price: 200,
-    originalPrice: 240,
-    rating: 4.6,
-    reviews: 95,
-    inStock: true,
-    description:
-      "Assorted vegetable pickle with mango, lemon, carrot, and other seasonal vegetables. A perfect blend of flavors in every bite.",
-    ingredients: "Mango, Lemon, Carrot, Cauliflower, Mustard Oil, Salt, Spices, Turmeric, Fenugreek",
-    nutritionalInfo: "Energy: 50 kcal per 100g, Carbohydrates: 9g, Fat: 2g, Protein: 1.5g, Sodium: 850mg",
-    shelfLife: "12 months",
-    weight: "400g",
-  }
+type Product = {
+  id: string
+  name: string
+  brand: string
+  images: string[]
+  price: number
+  originalPrice?: number
+  rating: number
+  reviews: number
+  inStock: boolean
+  description: string
+  ingredients: string
+  nutritionalInfo: string
+  shelfLife: string
+  weight: string
+  isBestseller?: boolean
+  isNew?: boolean
+  category?: string
 }
 
 const reviews = [
@@ -292,8 +44,7 @@ const reviews = [
     name: "Priya Sharma",
     rating: 5,
     date: "2024-01-15",
-    comment:
-      "Absolutely delicious! Tastes just like my grandmother's homemade pickle. The quality is exceptional and the packaging is perfect.",
+    comment: "Absolutely delicious! Tastes just like my grandmother's homemade pickle. The quality is exceptional and the packaging is perfect.",
     verified: true,
   },
   {
@@ -309,27 +60,164 @@ const reviews = [
     name: "Meera Patel",
     rating: 5,
     date: "2024-01-08",
-    comment:
-      "Best mango pickle I've ever tasted! No artificial taste, completely natural and fresh. Highly recommended!",
+    comment: "Best mango pickle I've ever tasted! No artificial taste, completely natural and fresh. Highly recommended!",
     verified: true,
   },
 ]
 
 export default function ProductDetailPage() {
   const { addToCart } = useCart()
-  
+  const { user } = useAuth()
   const params = useParams()
   const productId = params.id as string
-  const product = productData[productId as keyof typeof productData]
 
+  const [product, setProduct] = useState<Product | null>(null)
+  const [loading, setLoading] = useState(true)
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
+  const [isInWishlist, setIsInWishlist] = useState(false)
+  const [isWishlistLoading, setIsWishlistLoading] = useState(false)
 
-  if (!product) {
-    return <div>Product not found</div>
+  // Check if product is in wishlist
+  useEffect(() => {
+    const checkWishlistStatus = async () => {
+      if (!user || !productId) return
+      
+      try {
+        const wishlistDoc = await getDoc(doc(db, 'users', user.uid, 'wishlist', productId))
+        setIsInWishlist(wishlistDoc.exists())
+      } catch (error) {
+        console.error("Error checking wishlist status:", error)
+      }
+    }
+
+    checkWishlistStatus()
+  }, [user, productId])
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const docRef = doc(db, 'products', productId)
+        const docSnap = await getDoc(docRef)
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data()
+          setProduct({
+            id: docSnap.id,
+            name: data.name,
+            brand: data.brand || "Mom's Recipe",
+            images: data.images || ["/placeholder.svg"],
+            price: data.price,
+            originalPrice: data.originalPrice,
+            rating: data.rating || 4.5,
+            reviews: data.reviews || 0,
+            inStock: data.inStock !== false,
+            description: data.description,
+            ingredients: data.ingredients,
+            nutritionalInfo: data.nutritionalInfo,
+            shelfLife: data.shelfLife,
+            weight: data.weight,
+            isBestseller: data.isBestseller,
+            isNew: data.isNew,
+            category: data.category
+          })
+        } else {
+          console.error("Product not found")
+        }
+      } catch (error) {
+        console.error("Error fetching product:", error)
+        toast.error("Failed to load product")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (productId) {
+      fetchProduct()
+    }
+  }, [productId])
+
+  const toggleWishlist = async () => {
+    if (!user) {
+      toast.error("Please sign in to add items to wishlist")
+      return
+    }
+
+    if (!product) return
+
+    setIsWishlistLoading(true)
+    try {
+      const wishlistRef = doc(db, 'users', user.uid, 'wishlist', product.id)
+      
+      if (isInWishlist) {
+        // Remove from wishlist
+        await deleteDoc(wishlistRef)
+        setIsInWishlist(false)
+        toast.success("Removed from wishlist")
+      } else {
+        // Add to wishlist
+        const productData = {
+          id: product.id,
+          name: product.name,
+          image: product.images[0],
+          price: product.price,
+          originalPrice: product.originalPrice,
+          rating: product.rating,
+          reviews: product.reviews,
+          isNew: product.isNew,
+          isBestseller: product.isBestseller,
+          category: product.category,
+          weight: product.weight,
+          inStock: product.inStock,
+          addedAt: new Date()
+        }
+        
+        await setDoc(wishlistRef, productData)
+        setIsInWishlist(true)
+        toast.success("Added to wishlist!")
+      }
+    } catch (error) {
+      console.error("Error toggling wishlist:", error)
+      toast.error("Failed to update wishlist")
+    } finally {
+      setIsWishlistLoading(false)
+    }
   }
 
-  const discount = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading product...</p>
+          </div>
+        </main>
+        <Footer />
+      </>
+    )
+  }
+
+  if (!product) {
+    return (
+      <>
+        <Header />
+        <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Product Not Found</h1>
+            <p className="text-gray-600 mb-6">The product you&rsquo;re looking for doesn&rsquo;t exist.</p>
+            <Button onClick={() => window.history.back()}>Go Back</Button>
+          </div>
+        </main>
+        <Footer />
+      </>
+    )
+  }
+
+  const discount = product.originalPrice 
+    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+    : 0
 
   return (
     <>
@@ -346,11 +234,15 @@ export default function ProductDetailPage() {
                   fill
                   className="object-cover"
                 />
-                {discount > 0 && <Badge className="absolute left-4 top-4 bg-red-600 text-white">{discount}% OFF</Badge>}
+                {discount > 0 && (
+                  <Badge className="absolute left-4 top-4 bg-red-600 text-white">{discount}% OFF</Badge>
+                )}
                 {product.isBestseller && (
                   <Badge className="absolute right-4 top-4 bg-yellow-600 text-white">Bestseller</Badge>
                 )}
-                {product.isNew && <Badge className="absolute right-4 top-4 bg-green-600 text-white">New</Badge>}
+                {product.isNew && (
+                  <Badge className="absolute right-4 top-4 bg-green-600 text-white">New</Badge>
+                )}
               </div>
 
               {/* Thumbnail Images */}
@@ -398,8 +290,12 @@ export default function ProductDetailPage() {
                 {/* Price */}
                 <div className="flex items-center space-x-3 mb-4">
                   <span className="text-3xl font-bold text-green-600">₹{product.price}</span>
-                  <span className="text-xl text-gray-500 line-through">₹{product.originalPrice}</span>
-                  <Badge variant="destructive">{discount}% OFF</Badge>
+                  {product.originalPrice && (
+                    <>
+                      <span className="text-xl text-gray-500 line-through">₹{product.originalPrice}</span>
+                      <Badge variant="destructive">{discount}% OFF</Badge>
+                    </>
+                  )}
                 </div>
 
                 {/* Stock Status */}
@@ -441,22 +337,34 @@ export default function ProductDetailPage() {
                   <Button
                     size="lg"
                     className="flex-1 bg-green-600 hover:bg-green-700"
-                    onClick={() =>
+                    onClick={() => {
                       addToCart({
                         id: product.id,
                         name: product.name,
                         price: product.price,
+                        originalPrice: product.originalPrice,
                         quantity,
                         image: product.images[0],
+                        weight: product.weight
                       })
-                    }
+                      toast.success("Added to cart!")
+                    }}
+                    disabled={!product.inStock}
                   >
                     <ShoppingCart className="h-5 w-5 mr-2" />
-                    Add to Cart
+                    {product.inStock ? 'Add to Cart' : 'Out of Stock'}
                   </Button>
 
-                  <Button variant="outline" size="lg">
-                    <Heart className="h-5 w-5" />
+                  <Button 
+                    variant="outline" 
+                    size="lg"
+                    onClick={toggleWishlist}
+                    disabled={isWishlistLoading}
+                    className={isInWishlist ? "text-red-600 border-red-600" : ""}
+                  >
+                    <Heart 
+                      className={`h-5 w-5 ${isInWishlist ? "fill-red-600" : ""}`} 
+                    />
                   </Button>
                   <Button variant="outline" size="lg">
                     <Share2 className="h-5 w-5" />
@@ -468,7 +376,7 @@ export default function ProductDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t">
                 <div className="flex items-center space-x-2">
                   <Truck className="h-5 w-5 text-green-600" />
-                  <span className="text-sm">Free Shipping</span>
+                  <span className="text-sm">Free Shipping over ₹500</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Shield className="h-5 w-5 text-green-600" />

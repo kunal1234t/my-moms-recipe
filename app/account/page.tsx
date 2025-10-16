@@ -1,40 +1,69 @@
 "use client"
-import { useEffect, useState } from "react"
-import { useSession, signOut, signIn } from "next-auth/react"
+import { useEffect, useState, useCallback } from "react"
+import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
-import { User, Package, Heart, Settings, LogOut, Edit } from "lucide-react"
+import { User, Package, Heart, Settings, LogOut, Edit, ShoppingCart, Trash2, ArrowRight } from "lucide-react"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import LoadingScreen from "@/components/loading-screen"
+import { doc, getDoc, updateDoc, collection, query, getDocs, deleteDoc, where, orderBy } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "sonner"
+import Image from "next/image"
+import { useCart } from "@/contexts/cart-context"
+import Link from "next/link"
 
-const orderHistory = [
-  {
-    id: "ORD001",
-    date: "2024-01-15",
-    status: "Delivered",
-    total: 447,
-    items: [
-      { name: "Mango Chatkara", quantity: 2, price: 149 },
-      { name: "Mirch Pickle", quantity: 1, price: 129 },
-    ],
-  },
-  {
-    id: "ORD002",
-    date: "2024-01-08",
-    status: "Processing",
-    total: 338,
-    items: [{ name: "Mix Pickle", quantity: 2, price: 169 }],
-  },
-]
+interface WishlistItem {
+  id: string
+  name: string
+  image: string
+  price: number
+  originalPrice?: number
+  rating: number
+  reviews: number
+  isNew?: boolean
+  isBestseller?: boolean
+  category?: string
+  weight?: string
+  inStock?: boolean
+  addedAt: string
+}
+
+interface Order {
+  id: string
+  user: {
+    uid: string
+    email: string
+    name: string
+    phone: string
+  }
+  items: OrderItem[]
+  totalAmount: number
+  subtotal: number
+  shipping: number
+  shippingAddress: string
+  paymentMethod: string
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled'
+  createdAt: string
+  updatedAt?: string
+}
+
+interface OrderItem {
+  id: string
+  name: string
+  price: number
+  quantity: number
+  image: string
+  weight?: string
+}
 
 export default function AccountPage() {
-  const { data: session, status } = useSession()
+  const { user, logout, loading } = useAuth()
+  const { addToCart } = useCart()
   const router = useRouter()
 
   const [userInfo, setUserInfo] = useState({
@@ -46,38 +75,248 @@ export default function AccountPage() {
   })
 
   const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [isWishlistLoading, setIsWishlistLoading] = useState(true)
+  const [isOrdersLoading, setIsOrdersLoading] = useState(true)
 
- const fetchUserInfo = async () => {
-  try {
-    const res = await fetch("/api/user")
-    const data = await res.json()
-    if (res.ok) {
-      setUserInfo({
-        firstName: data.firstName || "",
-        lastName: data.lastName || "",
-        email: data.email || "",
-        phone: data.phone || "",
-        address: data.address || "",
-      })
-    } else {
-      console.error("Failed to load user data:", data.error)
+  // Wrap fetchUserInfo in useCallback to make it stable
+  const fetchUserInfo = useCallback(async () => {
+    if (!user) return
+    
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid))
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        setUserInfo({
+          firstName: userData.firstName || "",
+          lastName: userData.lastName || "",
+          email: userData.email || user.email || "",
+          phone: userData.phone || "",
+          address: userData.address || "",
+        })
+      } else {
+        // If no user document exists, create one with basic info
+        setUserInfo({
+          firstName: user.displayName?.split(' ')[0] || "",
+          lastName: user.displayName?.split(' ')[1] || "",
+          email: user.email || "",
+          phone: "",
+          address: "",
+        })
+      }
+    } catch (err) {
+      console.error("Error fetching user info:", err)
+      toast.error("Failed to load user data")
     }
-  } catch (err) {
-    console.error("Error fetching user info:", err)
+  }, [user])
+
+  // Fetch wishlist items
+  const fetchWishlist = useCallback(async () => {
+    if (!user) {
+      setIsWishlistLoading(false)
+      return
+    }
+    
+    try {
+      console.log("🔄 Fetching wishlist for user:", user.uid)
+      const wishlistRef = collection(db, 'users', user.uid, 'wishlist')
+      const q = query(wishlistRef)
+      const querySnapshot = await getDocs(q)
+      
+      console.log("📊 Wishlist documents found:", querySnapshot.size)
+      
+      const items: WishlistItem[] = []
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        console.log("📦 Wishlist item:", data)
+        items.push({
+          id: doc.id,
+          ...data
+        } as WishlistItem)
+      })
+      
+      // Sort by added date (newest first)
+      items.sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime())
+      setWishlistItems(items)
+      console.log("✅ Wishlist items loaded:", items.length)
+    } catch (error) {
+      console.error("❌ Error fetching wishlist:", error)
+      toast.error("Failed to load wishlist")
+    } finally {
+      setIsWishlistLoading(false)
+    }
+  }, [user])
+
+  // Fetch orders
+  const fetchOrders = useCallback(async () => {
+    if (!user) {
+      setIsOrdersLoading(false)
+      return
+    }
+    
+    try {
+      console.log("🔄 Fetching orders for user:", user.uid)
+      const ordersRef = collection(db, 'orders')
+      const q = query(
+        ordersRef, 
+        where('user.uid', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      )
+      
+      const querySnapshot = await getDocs(q)
+      console.log("📊 Order documents found:", querySnapshot.size)
+      
+      const ordersData: Order[] = []
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        ordersData.push({
+          id: doc.id,
+          ...data
+        } as Order)
+      })
+      
+      setOrders(ordersData)
+      console.log("✅ Orders loaded:", ordersData.length)
+    } catch (error: unknown) {
+      console.error("❌ Error fetching orders:", error)
+      
+      // Fallback: fetch without orderBy and sort client-side
+      try {
+        const ordersRef = collection(db, 'orders')
+        const fallbackQuery = query(ordersRef, where('user.uid', '==', user.uid))
+        const fallbackSnapshot = await getDocs(fallbackQuery)
+        
+        const fallbackOrders: Order[] = []
+        fallbackSnapshot.forEach((doc) => {
+          fallbackOrders.push({
+            id: doc.id,
+            ...doc.data()
+          } as Order)
+        })
+        
+        // Client-side sorting
+        fallbackOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        setOrders(fallbackOrders)
+        console.log("✅ Orders loaded with fallback:", fallbackOrders.length)
+      } catch (fallbackError) {
+        console.error("❌ Fallback also failed:", fallbackError)
+        toast.error("Failed to load orders")
+      }
+    } finally {
+      setIsOrdersLoading(false)
+    }
+  }, [user])
+
+  const saveUserInfo = async () => {
+    if (!user) return
+    
+    setIsSaving(true)
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        ...userInfo,
+        updatedAt: new Date()
+      })
+      toast.success("Profile updated successfully!")
+      setIsEditing(false)
+    } catch (err) {
+      console.error("Error saving user info:", err)
+      toast.error("Failed to update profile")
+    } finally {
+      setIsSaving(false)
+    }
   }
-}
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      toast.success("Logged out successfully!")
+      router.push("/")
+    } catch (err) {
+      console.error("Logout error:", err)
+      toast.error("Failed to logout")
+    }
+  }
+
+  const removeFromWishlist = async (productId: string) => {
+    if (!user) return
+    
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'wishlist', productId))
+      setWishlistItems(prev => prev.filter(item => item.id !== productId))
+      toast.success("Removed from wishlist")
+    } catch (error) {
+      console.error("Error removing from wishlist:", error)
+      toast.error("Failed to remove from wishlist")
+    }
+  }
+
+  const addToCartFromWishlist = (item: WishlistItem) => {
+    addToCart({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      originalPrice: item.originalPrice,
+      quantity: 1,
+      image: item.image,
+      weight: item.weight
+    })
+    toast.success("Added to cart!")
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return "bg-yellow-100 text-yellow-800"
+      case 'confirmed':
+        return "bg-blue-100 text-blue-800"
+      case 'shipped':
+        return "bg-purple-100 text-purple-800"
+      case 'delivered':
+        return "bg-green-100 text-green-800"
+      case 'cancelled':
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
+  }
+
+  // Get recent 2 wishlist items
+  const recentWishlistItems = wishlistItems.slice(0, 2)
+  
+  // Get recent 2 orders
+  const recentOrders = orders.slice(0, 2)
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      signIn()
+    if (!loading && !user) {
+      router.push("/auth/signin")
     }
-    if (status === "authenticated") {
-      fetchUserInfo()
-    }
-  }, [status])
+  }, [user, loading, router])
 
-  if (status === "loading") {
+  useEffect(() => {
+    if (user) {
+      fetchUserInfo()
+      fetchWishlist()
+      fetchOrders()
+    }
+  }, [user, fetchUserInfo, fetchWishlist, fetchOrders])
+
+  if (loading) {
     return <LoadingScreen />
+  }
+
+  if (!user) {
+    return null // Will redirect in useEffect
   }
 
   return (
@@ -105,14 +344,18 @@ export default function AccountPage() {
                       <User className="h-4 w-4 mr-2" />
                       Profile
                     </Button>
-                    <Button variant="ghost" className="w-full justify-start">
-                      <Package className="h-4 w-4 mr-2" />
-                      Orders
-                    </Button>
-                    <Button variant="ghost" className="w-full justify-start">
-                      <Heart className="h-4 w-4 mr-2" />
-                      Wishlist
-                    </Button>
+                    <Link href="/account/orders">
+                      <Button variant="ghost" className="w-full justify-start">
+                        <Package className="h-4 w-4 mr-2" />
+                        Orders ({orders.length})
+                      </Button>
+                    </Link>
+                    <Link href="/account/wishlist">
+                      <Button variant="ghost" className="w-full justify-start">
+                        <Heart className="h-4 w-4 mr-2" />
+                        Wishlist ({wishlistItems.length})
+                      </Button>
+                    </Link>
                     <Button variant="ghost" className="w-full justify-start">
                       <Settings className="h-4 w-4 mr-2" />
                       Settings
@@ -120,12 +363,12 @@ export default function AccountPage() {
                     <Button
                       variant="ghost"
                       className="w-full justify-start text-red-600"
-                      onClick={() => signOut({ callbackUrl: "/" })}
+                      onClick={handleLogout}
+                      disabled={isSaving}
                     >
                       <LogOut className="h-4 w-4 mr-2" />
                       Logout
                     </Button>
-
                   </nav>
                 </CardContent>
               </Card>
@@ -136,8 +379,8 @@ export default function AccountPage() {
               <Tabs defaultValue="profile" className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="profile">Profile</TabsTrigger>
-                  <TabsTrigger value="orders">Orders</TabsTrigger>
-                  <TabsTrigger value="wishlist">Wishlist</TabsTrigger>
+                  <TabsTrigger value="orders">Recent Orders</TabsTrigger>
+                  <TabsTrigger value="wishlist">Recent Wishlist</TabsTrigger>
                   <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
 
@@ -145,7 +388,12 @@ export default function AccountPage() {
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                       <CardTitle>Personal Information</CardTitle>
-                      <Button variant="outline" size="sm" onClick={() => setIsEditing(!isEditing)}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setIsEditing(!isEditing)}
+                        disabled={isSaving}
+                      >
                         <Edit className="h-4 w-4 mr-2" />
                         {isEditing ? "Cancel" : "Edit"}
                       </Button>
@@ -153,60 +401,55 @@ export default function AccountPage() {
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="firstName">First Name</Label>
-                          <Input
-                            id="firstName"
-                            value={userInfo.firstName}
-                            disabled={!isEditing}
-                            onChange={(e) => setUserInfo((prev) => ({ ...prev, firstName: e.target.value }))}
-                          />
+                          <p className="text-sm font-medium">First Name</p>
+                          <div className="p-2 border rounded-md bg-gray-50">
+                            {userInfo.firstName || "Not set"}
+                          </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="lastName">Last Name</Label>
-                          <Input
-                            id="lastName"
-                            value={userInfo.lastName}
-                            disabled={!isEditing}
-                            onChange={(e) => setUserInfo((prev) => ({ ...prev, lastName: e.target.value }))}
-                          />
+                          <p className="text-sm font-medium">Last Name</p>
+                          <div className="p-2 border rounded-md bg-gray-50">
+                            {userInfo.lastName || "Not set"}
+                          </div>
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={userInfo.email}
-                          disabled={!isEditing}
-                          onChange={(e) => setUserInfo((prev) => ({ ...prev, email: e.target.value }))}
-                        />
+                        <p className="text-sm font-medium">Email</p>
+                        <div className="p-2 border rounded-md bg-gray-50">
+                          {userInfo.email}
+                        </div>
+                        <p className="text-xs text-gray-500">Email cannot be changed</p>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input
-                          id="phone"
-                          value={userInfo.phone}
-                          disabled={!isEditing}
-                          onChange={(e) => setUserInfo((prev) => ({ ...prev, phone: e.target.value }))}
-                        />
+                        <p className="text-sm font-medium">Phone</p>
+                        <div className="p-2 border rounded-md bg-gray-50">
+                          {userInfo.phone || "Not set"}
+                        </div>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="address">Address</Label>
-                        <Input
-                          id="address"
-                          value={userInfo.address}
-                          disabled={!isEditing}
-                          onChange={(e) => setUserInfo((prev) => ({ ...prev, address: e.target.value }))}
-                        />
+                        <p className="text-sm font-medium">Address</p>
+                        <div className="p-2 border rounded-md bg-gray-50 min-h-10">
+                          {userInfo.address || "Not set"}
+                        </div>
                       </div>
 
                       {isEditing && (
                         <div className="flex space-x-2">
-                          <Button className="bg-green-600 hover:bg-green-700">Save Changes</Button>
-                          <Button variant="outline" onClick={() => setIsEditing(false)}>
+                          <Button 
+                            className="bg-green-600 hover:bg-green-700"
+                            onClick={saveUserInfo}
+                            disabled={isSaving}
+                          >
+                            {isSaving ? "Saving..." : "Save Changes"}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setIsEditing(false)}
+                            disabled={isSaving}
+                          >
                             Cancel
                           </Button>
                         </div>
@@ -217,62 +460,163 @@ export default function AccountPage() {
 
                 <TabsContent value="orders" className="mt-6">
                   <Card>
-                    <CardHeader>
-                      <CardTitle>Order History</CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle>Recent Orders</CardTitle>
+                      <Link href="/account/orders">
+                        <Button variant="outline" size="sm">
+                          View All Orders
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </Button>
+                      </Link>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-4">
-                        {orderHistory.map((order) => (
-                          <div key={order.id} className="border rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-3">
-                              <div>
-                                <h3 className="font-semibold">Order #{order.id}</h3>
-                                <p className="text-sm text-gray-600">{order.date}</p>
-                              </div>
-                              <Badge
-                                variant={order.status === "Delivered" ? "default" : "secondary"}
-                                className={order.status === "Delivered" ? "bg-green-600" : ""}
-                              >
-                                {order.status}
-                              </Badge>
-                            </div>
-
-                            <div className="space-y-2 mb-3">
-                              {order.items.map((item, index) => (
-                                <div key={index} className="flex justify-between text-sm">
-                                  <span>
-                                    {item.name} x {item.quantity}
-                                  </span>
-                                  <span>₹{item.price * item.quantity}</span>
+                      {isOrdersLoading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                          <p className="mt-4 text-gray-600">Loading orders...</p>
+                        </div>
+                      ) : recentOrders.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders yet</h3>
+                          <p className="text-gray-600 mb-4">Your recent orders will appear here</p>
+                          <Button 
+                            className="bg-green-600 hover:bg-green-700"
+                            onClick={() => router.push("/products")}
+                          >
+                            Browse Products
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {recentOrders.map((order) => (
+                            <div key={order.id} className="border rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h3 className="font-semibold">Order #{order.id.slice(-8).toUpperCase()}</h3>
+                                  <p className="text-sm text-gray-600">{formatDate(order.createdAt)}</p>
                                 </div>
-                              ))}
-                            </div>
+                                <Badge className={`${getStatusColor(order.status)}`}>
+                                  {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                                </Badge>
+                              </div>
 
-                            <div className="flex justify-between items-center pt-2 border-t">
-                              <span className="font-semibold">Total: ₹{order.total}</span>
-                              <Button variant="outline" size="sm">
-                                View Details
-                              </Button>
+                              <div className="space-y-2 mb-3">
+                                {order.items.slice(0, 2).map((item, index) => (
+                                  <div key={index} className="flex justify-between text-sm">
+                                    <span>
+                                      {item.name} x {item.quantity}
+                                    </span>
+                                    <span>₹{item.price * item.quantity}</span>
+                                  </div>
+                                ))}
+                                {order.items.length > 2 && (
+                                  <p className="text-xs text-gray-500">+{order.items.length - 2} more items</p>
+                                )}
+                              </div>
+
+                              <div className="flex justify-between items-center pt-2 border-t">
+                                <span className="font-semibold">Total: ₹{order.totalAmount}</span>
+                                <Link href="/account/orders">
+                                  <Button variant="outline" size="sm">
+                                    View Details
+                                  </Button>
+                                </Link>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
 
                 <TabsContent value="wishlist" className="mt-6">
                   <Card>
-                    <CardHeader>
-                      <CardTitle>My Wishlist</CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle>Recent Wishlist Items</CardTitle>
+                      <Link href="/account/wishlist">
+                        <Button variant="outline" size="sm">
+                          View All Wishlist
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </Button>
+                      </Link>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-center py-8">
-                        <Heart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Your wishlist is empty</h3>
-                        <p className="text-gray-600 mb-4">Save items you love for later!</p>
-                        <Button className="bg-green-600 hover:bg-green-700">Browse Products</Button>
-                      </div>
+                      {isWishlistLoading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                          <p className="mt-4 text-gray-600">Loading wishlist...</p>
+                        </div>
+                      ) : recentWishlistItems.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Heart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Your wishlist is empty</h3>
+                          <p className="text-gray-600 mb-4">Save items you love for later!</p>
+                          <Button 
+                            className="bg-green-600 hover:bg-green-700"
+                            onClick={() => router.push("/products")}
+                          >
+                            Browse Products
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {recentWishlistItems.map((item) => (
+                            <Card key={item.id} className="hover:shadow-md transition-shadow">
+                              <CardContent className="p-4">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                  {/* Product Image */}
+                                  <div className="relative h-16 w-16 flex-shrink-0 rounded-md overflow-hidden">
+                                    <Image
+                                      src={item.image || "/placeholder.svg"}
+                                      alt={item.name}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                  </div>
+
+                                  {/* Product Info */}
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-semibold text-gray-900 mb-1">{item.name}</h3>
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      {item.weight && `${item.weight}`}
+                                    </p>
+                                    
+                                    {/* Price */}
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-lg font-bold text-green-600">₹{item.price}</span>
+                                      {item.originalPrice && (
+                                        <span className="text-sm text-gray-500 line-through">₹{item.originalPrice}</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      className="bg-green-600 hover:bg-green-700"
+                                      onClick={() => addToCartFromWishlist(item)}
+                                      disabled={!item.inStock}
+                                    >
+                                      <ShoppingCart className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => removeFromWishlist(item.id)}
+                                      className="text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -287,18 +631,26 @@ export default function AccountPage() {
                         <h3 className="text-lg font-semibold mb-4">Change Password</h3>
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <Label htmlFor="currentPassword">Current Password</Label>
-                            <Input id="currentPassword" type="password" />
+                            <p className="text-sm font-medium">Current Password</p>
+                            <div className="p-2 border rounded-md bg-gray-50 text-gray-500">
+                              ••••••••
+                            </div>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="newPassword">New Password</Label>
-                            <Input id="newPassword" type="password" />
+                            <p className="text-sm font-medium">New Password</p>
+                            <div className="p-2 border rounded-md bg-gray-50 text-gray-500">
+                              ••••••••
+                            </div>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
-                            <Input id="confirmNewPassword" type="password" />
+                            <p className="text-sm font-medium">Confirm New Password</p>
+                            <div className="p-2 border rounded-md bg-gray-50 text-gray-500">
+                              ••••••••
+                            </div>
                           </div>
-                          <Button className="bg-green-600 hover:bg-green-700">Update Password</Button>
+                          <Button className="bg-green-600 hover:bg-green-700">
+                            Update Password
+                          </Button>
                         </div>
                       </div>
 

@@ -28,9 +28,9 @@ export default function FeaturesSection() {
     <section className="py-16 bg-white">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Mom's Recipe?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose Mom&rsquo;s Recipe?</h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            We're committed to bringing you the authentic taste of home-made pickles with the highest quality standards.
+            We&rsquo;re committed to bringing you the authentic taste of home-made pickles with the highest quality standards.
           </p>
         </div>
 

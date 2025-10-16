@@ -9,6 +9,7 @@ type CartItem = {
   originalPrice?: number  // Added for consistency with your cart page
   image: string
   quantity: number
+  weight?: string  // Added for consistency with your cart page
 }
 
 type CartContextType = {
@@ -43,7 +44,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       const existing = prev.find((i) => i.id === item.id)
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i
+          i.id === item.id ? { ...i, quantity: i.quantity + item.quantity, weight: item.weight || i.weight } : i
         )
       } else {
         return [...prev, item]

@@ -1,17 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-
-
+import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 
 export default function SignUpPage() {
-  const router = useRouter();
+  const router = useRouter()
+  const { register, loginWithGoogle, loading } = useAuth()
+  
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -20,52 +22,77 @@ export default function SignUpPage() {
     confirmPassword: "",
     agreeToTerms: false,
   })
-
-  const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSignup = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  // 1. Validate form
-  if (formData.password !== formData.confirmPassword) {
-    alert("Passwords do not match");
-    return;
-  }
-
-  if (!formData.agreeToTerms) {
-    alert("Please agree to the terms.");
-    return;
-  }
-
-  // 2. Send POST request to API
-  const res = await fetch("/api/register", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      type: "signup",
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      password: formData.password,
-    }),
-  });
-
-  const data = await res.json();
-
-  // 3. Handle response
-  if (res.ok) {
-      // redirect to account page
-      router.push("/account");
-    } else {
-      alert(data.error || "Signup failed");
+    e.preventDefault()
+    
+    // Frontend validation
+    if (formData.password !== formData.confirmPassword) {
+      toast.error("Passwords do not match")
+      return
     }
-  };
 
+    if (formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters")
+      return
+    }
 
+    if (!formData.agreeToTerms) {
+      toast.error("Please agree to the terms and conditions")
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      await register(formData.email, formData.password, formData.firstName, formData.lastName)
+      toast.success("Account created successfully!")
+      router.push("/account")
+    } catch (error: unknown) {
+      console.error("Signup error:", error)
+      
+      const errorMessage = error instanceof Error ? error.message : "Signup failed. Please try again."
+      
+      // Handle specific Firebase auth errors
+      if (errorMessage.includes('auth/email-already-in-use')) {
+        toast.error("An account with this email already exists")
+      } else if (errorMessage.includes('auth/invalid-email')) {
+        toast.error("Invalid email address")
+      } else if (errorMessage.includes('auth/weak-password')) {
+        toast.error("Password is too weak")
+      } else {
+        toast.error("Signup failed. Please try again.")
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignUp = async () => {
+    setIsLoading(true)
+    try {
+      await loginWithGoogle()
+      toast.success("Account created successfully!")
+      router.push("/account")
+    } catch (error: unknown) {
+      console.error("Google sign-up error:", error)
+      
+      const errorMessage = error instanceof Error ? error.message : "Google sign-up failed. Please try again."
+      
+      if (errorMessage.includes('auth/popup-closed-by-user')) {
+        toast.error("Sign-up cancelled")
+      } else if (errorMessage.includes('auth/popup-blocked')) {
+        toast.error("Popup blocked! Please allow popups for this site.")
+      } else if (errorMessage.includes('auth/unauthorized-domain')) {
+        toast.error("This domain is not authorized for Google sign-in.")
+      } else {
+        toast.error("Google sign-up failed. Please try again.")
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div
@@ -74,7 +101,6 @@ export default function SignUpPage() {
         background: "linear-gradient(135deg, #16a34a 0%, #22c55e 25%, #65a30d 50%, #84cc16 75%, #eab308 100%)",
       }}
     >
-      {/* Curved background shapes */}
       <div className="absolute inset-0">
         <div
           className="absolute bottom-0 left-0 w-full h-3/4"
@@ -85,16 +111,13 @@ export default function SignUpPage() {
         />
       </div>
 
-      {/* Main content */}
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-          {/* Logo */}
           <div className="text-center mb-8">
-            <Image src="/images/logo.jpg" alt="My Mom's Recipe" width={120} height={60} className="mx-auto mb-6" />
+            <Image src="/images/logo.jpg" alt="My Mom&rsquo;s Recipe" width={120} height={60} className="mx-auto mb-6" />
             <h1 className="text-2xl font-semibold text-gray-800">Create Account</h1>
           </div>
 
-          {/* Form */}
           <form className="space-y-6" onSubmit={handleSignup}>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -103,11 +126,12 @@ export default function SignUpPage() {
                 </label>
                 <Input
                   id="firstName"
-                  type="firstName"
+                  type="text"
                   value={formData.firstName}
                   onChange={(e) => setFormData({...formData, firstName: e.target.value})}
                   className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                   required
+                  disabled={isLoading || loading}
                 />
               </div>
               <div>
@@ -116,11 +140,12 @@ export default function SignUpPage() {
                 </label>
                 <Input
                   id="lastName"
-                  type="lastName"
+                  type="text"
                   value={formData.lastName}
                   onChange={(e) => setFormData({...formData, lastName: e.target.value})}
                   className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                   required
+                  disabled={isLoading || loading}
                 />
               </div>
             </div>
@@ -136,6 +161,7 @@ export default function SignUpPage() {
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                 className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                 required
+                disabled={isLoading || loading}
               />
             </div>
 
@@ -150,7 +176,10 @@ export default function SignUpPage() {
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
                 className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                 required
+                disabled={isLoading || loading}
+                minLength={6}
               />
+              <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
             </div>
 
             <div>
@@ -159,21 +188,24 @@ export default function SignUpPage() {
               </label>
               <Input
                 id="confirmPassword"
-                type="confirmPassword"
+                type="password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
                 className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                 required
+                disabled={isLoading || loading}
               />
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-start space-x-2">
               <Checkbox
                 id="terms"
                 checked={formData.agreeToTerms}
                 onCheckedChange={(checked) => setFormData({...formData, agreeToTerms: Boolean(checked)})}
+                disabled={isLoading || loading}
+                className="mt-1"
               />
-              <label htmlFor="terms" className="text-sm text-gray-700">
+              <label htmlFor="terms" className="text-sm text-gray-700 leading-relaxed">
                 I agree to the{" "}
                 <Link href="/terms" className="text-blue-600 hover:underline">
                   Terms of Service
@@ -189,13 +221,16 @@ export default function SignUpPage() {
               <Button
                 type="submit"
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium"
+                disabled={isLoading || loading}
               >
-                Create Account
+                {(isLoading || loading) ? 'Creating Account...' : 'Create Account'}
               </Button>
               <Button
                 type="button"
                 variant="outline"
+                onClick={() => router.push('/')}
                 className="flex-1 bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-lg font-medium"
+                disabled={isLoading || loading}
               >
                 Cancel
               </Button>
@@ -220,7 +255,9 @@ export default function SignUpPage() {
             <Button
               type="button"
               variant="outline"
+              onClick={handleGoogleSignUp}
               className="w-full bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-lg font-medium flex items-center justify-center space-x-2"
+              disabled={isLoading || loading}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path

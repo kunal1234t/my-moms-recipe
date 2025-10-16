@@ -40,7 +40,7 @@ export default function ContactPage() {
           <div className="container mx-auto px-4 text-center text-white">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">Contact Us</h1>
             <p className="text-lg opacity-90 max-w-2xl mx-auto">
-              We'd love to hear from you. Send us a message and we'll respond as soon as possible.
+              We&rsquo;d love to hear from you. Send us a message and we&rsquo;ll respond as soon as possible.
             </p>
           </div>
         </section>
@@ -205,14 +205,14 @@ export default function ContactPage() {
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-2">Do you use artificial preservatives?</h3>
                       <p className="text-gray-700">
-                        No, we don't use any artificial colors or preservatives. All our products are made with natural
+                        No, we don&rsquo;t use any artificial colors or preservatives. All our products are made with natural
                         ingredients.
                       </p>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-2">Can I return a product if I'm not satisfied?</h3>
+                      <h3 className="font-semibold text-gray-900 mb-2">Can I return a product if I&rsquo;m not satisfied?</h3>
                       <p className="text-gray-700">
                         Yes, we have a 7-day return policy for unopened products. Please contact us for return
                         procedures.

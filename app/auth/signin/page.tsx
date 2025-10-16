@@ -1,32 +1,79 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { signIn } from "next-auth/react";
+import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 
 export default function SignInPage() {
-  const router = useRouter();
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/account'
+  const { login, loginWithGoogle, loading } = useAuth()
+  
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-   const handleSignin = async (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
+  const [isLoading, setIsLoading] = useState(false)
 
-  const res = await signIn("credentials", {
-    redirect: false,
-    email,
-    password,
-  });
+  const handleSignin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsLoading(true)
 
-  if (res?.error) {
-    alert(res.error || "Signin failed");
-  } else {
-    router.push("/account");
+    try {
+      await login(email, password)
+      toast.success("Signed in successfully!")
+      router.push(callbackUrl)
+    } catch (error: unknown) {
+      console.error("Signin error:", error)
+      
+      // Handle specific Firebase auth errors
+      const errorMessage = error instanceof Error ? error.message : "Sign in failed. Please try again."
+      
+      if (errorMessage.includes('auth/invalid-credential')) {
+        toast.error("Invalid email or password")
+      } else if (errorMessage.includes('auth/user-not-found')) {
+        toast.error("No account found with this email")
+      } else if (errorMessage.includes('auth/wrong-password')) {
+        toast.error("Incorrect password")
+      } else if (errorMessage.includes('auth/too-many-requests')) {
+        toast.error("Too many failed attempts. Please try again later.")
+      } else {
+        toast.error("Sign in failed. Please try again.")
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
-};
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true)
+    try {
+      await loginWithGoogle()
+      toast.success("Signed in successfully!")
+      router.push(callbackUrl)
+    } catch (error: unknown) {
+      console.error("Google sign-in error:", error)
+      
+      const errorMessage = error instanceof Error ? error.message : "Google sign-in failed. Please try again."
+      
+      if (errorMessage.includes('auth/popup-closed-by-user')) {
+        toast.error("Sign-in cancelled")
+      } else if (errorMessage.includes('auth/popup-blocked')) {
+        toast.error("Popup blocked! Please allow popups for this site.")
+      } else if (errorMessage.includes('auth/unauthorized-domain')) {
+        toast.error("This domain is not authorized for Google sign-in.")
+      } else {
+        toast.error("Google sign-in failed. Please try again.")
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div
       className="min-h-screen relative overflow-hidden"
@@ -50,7 +97,7 @@ export default function SignInPage() {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
           {/* Logo */}
           <div className="text-center mb-8">
-            <Image src="/images/logo.jpg" alt="My Mom's Recipe" width={120} height={60} className="mx-auto mb-6" />
+            <Image src="/images/logo.jpg" alt="My Mom&rsquo;s Recipe" width={120} height={60} className="mx-auto mb-6" />
             <h1 className="text-2xl font-semibold text-gray-800">Sign In</h1>
           </div>
 
@@ -67,6 +114,7 @@ export default function SignInPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                 required
+                disabled={isLoading || loading}
               />
             </div>
 
@@ -81,6 +129,7 @@ export default function SignInPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full border-0 border-b-2 border-gray-200 rounded-none px-0 py-2 focus:border-green-600 focus:ring-0 bg-transparent"
                 required
+                disabled={isLoading || loading}
               />
             </div>
 
@@ -94,13 +143,16 @@ export default function SignInPage() {
               <Button
                 type="submit"
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium"
+                disabled={isLoading || loading}
               >
-                Sign In
+                {(isLoading || loading) ? 'Signing In...' : 'Sign In'}
               </Button>
               <Button
                 type="button"
                 variant="outline"
+                onClick={() => router.push('/')}
                 className="flex-1 bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-lg font-medium"
+                disabled={isLoading || loading}
               >
                 Cancel
               </Button>
@@ -125,7 +177,9 @@ export default function SignInPage() {
             <Button
               type="button"
               variant="outline"
+              onClick={handleGoogleSignIn}
               className="w-full bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 py-3 rounded-lg font-medium flex items-center justify-center space-x-2"
+              disabled={isLoading || loading}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
