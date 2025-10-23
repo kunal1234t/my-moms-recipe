@@ -1,7 +1,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { Facebook, Instagram, Twitter, Phone, Mail, MapPin } from "lucide-react"
-
+import { IMGBB_IMAGES } from "@/utils/imgbbImages"
 export default function Footer() {
   return (
     <footer className="bg-gray-900 text-white">
@@ -10,7 +10,7 @@ export default function Footer() {
           {/* Company Info */}
           <div>
             <Image
-              src="/images/logo.jpg"
+              src={IMGBB_IMAGES.logo}
               alt="My Mom's Recipe"
               width={150}
               height={75}
@@ -103,11 +103,11 @@ export default function Footer() {
             <div className="space-y-3">
               <div className="flex items-center">
                 <Phone className="h-5 w-5 mr-3 text-green-500" />
-                <span className="text-gray-400">+91 123-456-7890</span>
+                <span className="text-gray-400">+91 9315586634</span>
               </div>
               <div className="flex items-center">
                 <Mail className="h-5 w-5 mr-3 text-green-500" />
-                <span className="text-gray-400">hello@momsrecipe.com</span>
+                <span className="text-gray-400">momsrecipe@gmail.com</span>
               </div>
               <div className="flex items-start">
                 <MapPin className="h-5 w-5 mr-3 mt-1 text-green-500" />

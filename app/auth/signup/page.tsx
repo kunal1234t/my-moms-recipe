@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
+import LoadingScreen from "@/components/loading-screen"
 
 export default function SignUpPage() {
   const router = useRouter()
-  const { register, loginWithGoogle, loading } = useAuth()
+  const { register, loginWithGoogle, user, loading } = useAuth()
   
+  // Move ALL hooks to the top, before any conditionals
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -23,6 +25,21 @@ export default function SignUpPage() {
     agreeToTerms: false,
   })
   const [isLoading, setIsLoading] = useState(false)
+  
+  useEffect(() => {
+    if (user && !loading) {
+      router.push("/account")
+    }
+  }, [user, loading, router])
+
+  // Conditionals should come AFTER all hooks
+  if (loading){
+    return <LoadingScreen />
+  }
+  
+  if (user){
+    return null;
+  }
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()

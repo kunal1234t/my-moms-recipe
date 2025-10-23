@@ -1,23 +1,40 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
+import LoadingScreen from "@/components/loading-screen"
 import { toast } from "sonner"
 
 export default function SignInPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/account'
-  const { login, loginWithGoogle, loading } = useAuth()
+  const { login, loginWithGoogle, user, loading } = useAuth()
   
+  // Move ALL hooks to the top, before any conditionals
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  
+  useEffect(() => {
+    if (user && !loading) {
+      router.push("/account")
+    }
+  }, [user, loading, router])
+  
+  // Conditionals should come AFTER all hooks
+  if (loading) {
+    return <LoadingScreen />
+  }
+  
+  if (user) {
+    return null;
+  }
 
   const handleSignin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()

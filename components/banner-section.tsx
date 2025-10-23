@@ -1,5 +1,6 @@
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { IMGBB_IMAGES } from "@/utils/imgbbImages"
 
 export default function BannerSection() {
   return (
@@ -9,11 +10,12 @@ export default function BannerSection() {
           {/* Banner 1 */}
           <div className="relative overflow-hidden rounded-2xl shadow-lg group">
             <Image
-              src="/images/banner1.jpg"
+              src={IMGBB_IMAGES.productBanner1}
               alt="Home-made Aachar Collection"
               width={600}
               height={400}
               className="w-full h-80 object-cover transition-transform duration-300 group-hover:scale-105"
+              unoptimized={true} // Add this if images don't load
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-6 left-6 text-white">
@@ -28,11 +30,12 @@ export default function BannerSection() {
           {/* Banner 2 */}
           <div className="relative overflow-hidden rounded-2xl shadow-lg group">
             <Image
-              src="/images/banner2.png"
+              src={IMGBB_IMAGES.productBanner2}
               alt="Borcelle Pickles by Niranjan Devi"
               width={600}
               height={400}
               className="w-full h-80 object-cover transition-transform duration-300 group-hover:scale-105"
+              unoptimized={true} // Add this if images don't load
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-6 left-6 text-white">

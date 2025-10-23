@@ -41,6 +41,7 @@ export default function ProductCard({
             alt={name}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-105"
+            unoptimized={true} // Add this - same as product detail page
           />
           {isNew && <Badge className="absolute left-2 top-2 bg-green-600">New</Badge>}
           {isBestseller && <Badge className="absolute left-2 top-2 bg-yellow-600">Bestseller</Badge>}

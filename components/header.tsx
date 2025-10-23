@@ -13,6 +13,7 @@ import { useCart } from "@/contexts/cart-context"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
 import Image from "next/image"
+import { IMGBB_IMAGES } from "@/utils/imgbbImages"
 
 export default function Header() {
   const pathname = usePathname()
@@ -45,7 +46,7 @@ export default function Header() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <Image src="/images/logo.jpg" alt="My Mom&rsquo;s Recipe" width={120} height={60} className="h-12 w-auto" />
+            <Image src={IMGBB_IMAGES.logo} alt="My Mom&rsquo;s Recipe" width={120} height={60} className="h-12 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}

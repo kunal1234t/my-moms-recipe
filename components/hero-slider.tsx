@@ -4,18 +4,19 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { IMGBB_IMAGES } from "@/utils/imgbbImages"
 
 const slides = [
   {
     id: 1,
-    image: "/images/slider1.png",
+    image: IMGBB_IMAGES.homeBanner1,
     title: "Authentic Home-Made Pickles",
     subtitle: "Made with love, just like mom used to make",
     cta: "Shop Now",
   },
   {
     id: 2,
-    image: "/images/slider2.png",
+    image: IMGBB_IMAGES.homeBanner2,
     title: "Premium Quality Ingredients",
     subtitle: "No artificial colors or preservatives",
     cta: "Explore Products",
@@ -50,11 +51,12 @@ export default function HeroSlider() {
           }`}
         >
           <Image
-            src={slide.image || "/placeholder.svg"}
+            src={slide.image}
             alt={slide.title}
             fill
             className="object-cover"
             priority={index === 0}
+            unoptimized={true} // Temporary fix - remove this once images work
           />
           <div className="absolute inset-0 bg-black/30" />
           <div className="absolute inset-0 flex items-center justify-center">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
+import { IMGBB_IMAGES } from "@/utils/imgbbImages"
 
 export default function LoadingScreen() {
   const [isLoading, setIsLoading] = useState(true)
@@ -37,7 +38,7 @@ export default function LoadingScreen() {
       <div className="text-center">
         {/* Logo */}
         <div className="mb-8">
-          <Image src="/images/logo.jpg" alt="My Mom&rsquo;s Recipe" width={200} height={100} className="mx-auto" />
+          <Image src={IMGBB_IMAGES.logo} alt="My Mom&rsquo;s Recipe" width={200} height={100} className="mx-auto" />
         </div>
 
         {/* Animated Loading Dots */}
